@@ -1,0 +1,74 @@
+Description: S3 Bucket Using a custom Resource
+Resources:
+  CustomResourceLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      # Create policy to allow lambda function to log to cloudwatch, and delete S3 objects
+      Policies:
+        - PolicyName: LoggingPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:List*
+                  - s3:DeleteObject
+                Resource: "*"
+  # this is the lambda function that will check for a response from cloudformation and respond accordingly
+  # on delete request type, delete s3 objects
+  CustomResourceLambda:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      Role: !GetAtt CustomResourceLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          def handler(event, context):
+              # print event/version for logging purposes
+              print(event)
+              print('boto version ' + boto3.__version__)
+              responseData = {}
+              ResponseStatus = cfnresponse.SUCCESS
+              s3bucketName = event['ResourceProperties']['s3bucketName']
+              # check for request type
+              if event['RequestType'] == 'Create':
+                  responseData['Message'] = "Resource creation successful!"
+              elif event['RequestType'] == 'Update':
+                  responseData['Message'] = "Resource update successful!"
+              elif event['RequestType'] == 'Delete':
+                  # now that request type is delete, delete all s3 objects in bucket and return success response.
+                  s3 = boto3.resource('s3')
+                  bucket = s3.Bucket(s3bucketName)
+                  bucket.objects.all().delete()
+                  responseData['Message'] = "Resource deletion successful!"
+              cfnresponse.send(event, context, ResponseStatus, responseData)
+  CustomResource:
+    Type: Custom::CustomResource
+    # You can just as easily create the lambda function independent of the cloudformation template to reference multiple projects, simply reference the arn
+    Properties:
+      ServiceToken: !GetAtt CustomResourceLambda.Arn
+      s3bucketName: !Ref S3Bucket
+    DependsOn: S3Bucket
+  S3Bucket:
+    Type: AWS::S3::Bucket
