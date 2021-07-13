@@ -1,4 +1,4 @@
-Description: S3 Bucket Using a custom Resource
+Description: S3 Object Delete with Custom Resource
 Resources:
   CustomResourceLambdaRole:
     Type: "AWS::IAM::Role"
@@ -23,7 +23,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
-        - PolicyName: S3Policy
+        - PolicyName: S3DeletePolicy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -32,7 +32,7 @@ Resources:
                   - s3:List*
                   - s3:DeleteObject
                 Resource: "*"
-  # this is the lambda function that will check for a response from cloudformation and respond accordingly
+  # this is the lambda function that will check for a response and respond accordingly.
   # on delete request type, delete s3 objects
   CustomResourceLambda:
     Type: "AWS::Lambda::Function"
@@ -47,21 +47,20 @@ Resources:
           def handler(event, context):
               # print event/version for logging purposes
               print(event)
-              print('boto version ' + boto3.__version__)
               responseData = {}
               ResponseStatus = cfnresponse.SUCCESS
               s3bucketName = event['ResourceProperties']['s3bucketName']
               # check for request type
               if event['RequestType'] == 'Create':
-                  responseData['Message'] = "Resource creation successful!"
+                  responseData['Message'] = "Resource created!"
               elif event['RequestType'] == 'Update':
-                  responseData['Message'] = "Resource update successful!"
+                  responseData['Message'] = "Resource updated!"
               elif event['RequestType'] == 'Delete':
                   # now that request type is delete, delete all s3 objects in bucket and return success response.
                   s3 = boto3.resource('s3')
                   bucket = s3.Bucket(s3bucketName)
                   bucket.objects.all().delete()
-                  responseData['Message'] = "Resource deletion successful!"
+                  responseData['Message'] = "Resource deleted!"
               cfnresponse.send(event, context, ResponseStatus, responseData)
   CustomResource:
     Type: Custom::CustomResource
