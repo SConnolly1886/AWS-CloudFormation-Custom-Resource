@@ -1,3 +1,4 @@
+AWSTemplateFormatVersion: 2010-09-09
 Description: S3 Object Delete with Custom Resource
 Resources:
   CustomResourceLambdaRole:
